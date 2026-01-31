@@ -2,15 +2,16 @@ import os
 from typing import BinaryIO
 import time
 from collections import defaultdict
+import multiprocessing as mp
 import re
-
 
 FILE_PATH = "../data/TinyStoriesV2-GPT4-train.txt"
 NUM_PROCESSES = 32
 SPECIAL_TOKENS = b"<|endoftext|>"
 
-SPERCIAL_TOKEN_ST = SPECIAL_TOKENS.decode("utf-8", errors="ignore")
+SPECIAL_TOKEN_STR = SPECIAL_TOKENS.decode("utf-8", errors="ignore")
 SPECIAL_TOKEN_PATTERN = re.compile(re.escape(SPECIAL_TOKEN_STR))
+
 
 def find_chunk_boundaries(
     file: BinaryIO,
@@ -58,47 +59,26 @@ def find_chunk_boundaries(
     # Make sure all boundaries are unique, but might be fewer than desired_num_chunks
     return sorted(set(chunk_boundaries))
 
-
-
-def pre_tokenization(text_chunk):
+def worker(chunk_data:str):
     """
-    预分词逻辑：
-    1. 使用正则表达式按特殊标记切分文本，保留分隔符。
-    2. 遍历切分后的片段：
-       - 如果是特殊标记：作为一个整体统计（不拆分）。
-       - 如果是普通文本：拆分为字符列表进行统计。
+    对一个 chunk 的文本做：
+    1. 先按特殊 token <|endoftext|> 拆成若干段（文档）；
+    2. 对每个文档内部做预分词 / 统计；
+    3. 不跨 <|endoftext|> 进行合并。
     """
-    stats = defaultdict(int)
-    
-    # 1. 构建正则表达式模式
-    # re.escape: 转义特殊字符，例如 <|endoftext|> 里的 | 和 > 
-    # | : 表示“或”的关系
-    # (...) : 括号表示捕获分组，这样 split 结果里会保留这些特殊标记
-    pattern = "(" + "|".join(re.escape(token) for token in SPERCIAL_TOKEN) + ")"
-    
-    # 2. 切分文本
-    # 例如: "Hi[Doc]Bye" -> ['Hi', '[Doc]', 'Bye']
-    parts = re.split(pattern, text_chunk)
+    locate_stats = defaultdict(int)
 
-    # 3. 处理每个片段
-    for part in parts:
-        if not part:  # 跳过空字符串
-            continue
-            
-        if part in SPECIAL_TOKENS:
-            # 这样 <|endoftext|> 就永远不会被拆成 '<', '|', 'e' ...
-            stats[part] += 1
-            
-        else:
-            # --- 原有逻辑 ---
-            # 如果是普通文本，按字符拆分（或者按空格分词）
-            # 进行 BPE 学习
-            tokens = list(part) 
-            for token in tokens:
-                stats[token] += 1
-                
-    return stats
+    segments = SPECIAL_TOKEN_PATTERN.split(chunk_data)
 
+    for segment in segments:
+        # 跳过空段（可能在开头/结尾或连续 special token 时出现）
+        if not segment:
+            continue 
+
+        for ch in segment:
+            locate_stats[ch] += 1
+
+    return locate_stats
 
 # ## Usage
 # with open(..., "rb") as f:
@@ -114,7 +94,6 @@ def pre_tokenization(text_chunk):
 
 
 if __name__ == "__main__":
-
     # ==========================================
     # ⏱️ 开始计时
     # ==========================================
@@ -127,38 +106,45 @@ if __name__ == "__main__":
         f.seek(0)
         print(f"文件大小: {file_size / (1024*1024):.2f} MB")
 
-        # 1.找到切分点
-        boundaries = find_chunk_boundaries(f, NUM_PROCESSES, SPECIAL_TOKEN)
+        # 1.找到切分点（在字节级按 <|endoftext|> 对齐）
+        boundaries = find_chunk_boundaries(f, NUM_PROCESSES, SPECIAL_TOKENS)
+        print(f"将文件切分为 {len(boundaries) - 1} 个块进行并行处理...")
+
         global_stats = defaultdict(int)
-        total_chunks = len(boundaries) - 1 # 总共有多少块
+        total_chunks = len(boundaries) - 1  # 总共有多少块
 
-        # 2.处理数据块
-        for i, (start, end) in enumerate(zip(boundaries[:-1], boundaries[1:])):
-            # 👇 加上这行打印，i+1 是因为索引从 0 开始，人类习惯看 1 开始
-            print(f"[进度] 处理块 {i + 1} / {total_chunks} (范围: {start} - {end})")
-                
-            f.seek(start)
-            chunk = f.read(end - start).decode("utf-8", errors="ignore")
+        # 2.切分chunks（读成字符串）
+        chunks = []  # 这个列表用来存所有的数据块 (字符串)
+        with open(FILE_PATH, "rb") as f2:
+            for i, (start, end) in enumerate(zip(boundaries[:-1], boundaries[1:])):
+                print(f"[准备] 加载块 {i + 1} / {len(boundaries) - 1}")
+                f2.seek(start)
+                raw_data = f2.read(end - start)
+                # 解码 (注意：错误处理)
+                text_chunk = raw_data.decode("utf-8", errors="ignore")
 
-            ## 2.1 Pre-tokenization [预分词 + 统计频率] 
-            chunk_stats = pre_tokenization(chunk)
+                chunks.append(text_chunk)
 
-            ## 2.2 累计到全局统计
-            for token, count in chunk_stats.items():
+        # 3.启动多进程
+        print(f"启动 {NUM_PROCESSES} 个进程进行并行统计...")
+        with mp.Pool(processes=NUM_PROCESSES) as pool:
+            results = pool.map(worker, chunks)
+
+        # 4.归约
+        print("正在合并结果...")
+        for local_dict in results:
+            for token, count in local_dict.items():
                 global_stats[token] += count
-            
-    # ==========================================
-    # ⏱️ 结束计时
-    # ==========================================
+
+        # ==========================================
+        # ⏱️ 结束计时
+        # ==========================================
         elapsed_time = time.time() - start_time
 
         print("-" * 40)
-        print(f" 串行预分词完成！")
+        print(f" 并行预分词完成！")
         print(f"耗时: {elapsed_time:.2f} 秒")
         print(f"共统计出 {len(global_stats)} 个不同的字符")
         # 可选：打印前 10 个最高频的字符
         sorted_stats = sorted(global_stats.items(), key=lambda x: -x[1])
         print(f"最高频的 10 个字符: {sorted_stats[:10]}")
-
-        
-

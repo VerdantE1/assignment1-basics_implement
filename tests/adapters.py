@@ -10,6 +10,10 @@ from jaxtyping import Bool, Float, Int
 from torch import Tensor
 
 
+### mylib
+from mylinear import Linear
+
+
 def run_linear(
     d_in: int,
     d_out: int,
@@ -28,8 +32,18 @@ def run_linear(
     Returns:
         Float[Tensor, "... d_out"]: The transformed output of your linear module.
     """
+    # 1. 创建一个初始化的Linear层
+    linear_layer = Linear(d_in, d_out, device=weights.device, dtype=weights.dtype)
 
-    raise NotImplementedError
+    # 2. 将外部Weight赋值进去
+    state_dict = {"weights":weights}
+    linear_layer.load_state_dict(state_dict)
+
+    # 3. 运行Linear
+    output = linear_layer.forward(in_features)
+    
+    return output
+
 
 
 def run_embedding(
