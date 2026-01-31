@@ -11,7 +11,7 @@ from torch import Tensor
 
 
 ### mylib
-from mylinear import Linear
+from cs336_basics.mylinear import Linear
 
 
 def run_linear(
