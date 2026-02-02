@@ -14,12 +14,12 @@ class multi_head_self_attetion(nn.Module):
         self.num_heads = num_heads
 
         # QKV三个形变空间
-        self.W_q = nn.Linear(d_model, d_model, bias =False)
-        self.W_k = nn.Linear(d_model, d_model, bias =False)
-        self.W_v = nn.Linear(d_model, d_model, bias =False)
+        self.q_proj = nn.Linear(d_model, d_model, bias =False)
+        self.k_proj = nn.Linear(d_model, d_model, bias =False)
+        self.v_proj = nn.Linear(d_model, d_model, bias =False)
 
         # 多头整合空间
-        self.W_o = nn.Linear(d_model, d_model, bias =False)
+        self.output_proj = nn.Linear(d_model, d_model, bias =False)
     
     def forward(self, x, qk_mask=None, rope=None, token_positions = None):
         # x.shape(..., seq_len, d_model)
@@ -27,9 +27,9 @@ class multi_head_self_attetion(nn.Module):
         device = x.device
 
         # 1. 生成查询、回答、贡献空间即QKV.
-        Q_total = self.W_q(x)   # ..., (seq_len, d_model)
-        K_total = self.W_k(x)   # ..., (seq_len, d_model)
-        V_total = self.W_v(x)   # ..., (seq_len, d_model)
+        Q_total = self.q_proj(x)   # ..., (seq_len, d_model)
+        K_total = self.k_proj(x)   # ..., (seq_len, d_model)
+        V_total = self.v_proj(x)   # ..., (seq_len, d_model)
 
         # 2. 逻辑切分多头
         Q_total = rearrange(Q_total, '... s (h di) -> ... h s di', h=self.num_heads)
@@ -52,7 +52,7 @@ class multi_head_self_attetion(nn.Module):
         mh_output = rearrange(mh_output, '... h q di -> ... q (h di)')  # ... d d
         
         # 5. 整合空间
-        res = self.W_o(mh_output)
+        res = self.output_proj(mh_output)
         return res 
 
 

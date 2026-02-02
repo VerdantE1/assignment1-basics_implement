@@ -17,7 +17,7 @@ class Linear(nn.Module):
         device_kwargs = {"device": device, "dtype": dtype}
 
         # 定义模型参数
-        self.weights = nn.Parameter(
+        self.weight = nn.Parameter(
             torch.empty(out_features, in_features, **device_kwargs)
         )
         
@@ -26,10 +26,10 @@ class Linear(nn.Module):
     
     def reset_parameter(self) -> None:
         weights_std = (2 / (self.in_features + self.out_features)) ** 0.5
-        init.trunc_normal_(self.weights, mean=0, std=weights_std,a=-3*weights_std,b=3*weights_std)
+        init.trunc_normal_(self.weight, mean=0, std=weights_std,a=-3*weights_std,b=3*weights_std)
     
     def forward(self, x:torch.Tensor) -> torch.Tensor:
-        return x @ self.weights.t()
+        return x @ self.weight.t()
 
 
 

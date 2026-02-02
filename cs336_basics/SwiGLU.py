@@ -11,30 +11,30 @@ class SwiGLU(nn.Module):
         self.d_ff = d_ff
 
         # 1. 线性层
-        self.linear_layer = Linear(d_model, d_ff, **kwargs)
+        self.w3 = Linear(d_model, d_ff, **kwargs)
 
         # 2. 门控层
-        self.glu_layer = Linear(d_model, d_ff, **kwargs)
+        self.w1 = Linear(d_model, d_ff, **kwargs)
 
         # 3. 映射层
-        self.ffn_layer = Linear(d_ff, d_model, **kwargs)
+        self.w2 = Linear(d_ff, d_model, **kwargs)
 
     def silu(self, x):
         return  x * torch.sigmoid(x)
 
     def forward(self,x: torch.Tensor):
         # 1. 线性层传播
-        y1 = self.linear_layer.forward(x)
+        y1 = self.w3.forward(x)
 
         # 2. 门控层传播
-        y2 = self.glu_layer.forward(x)
+        y2 = self.w1.forward(x)
         y2 = self.silu(y2)
 
         # 3. 哈达玛积
         y_inter = torch.mul(y1,y2)
 
         # 4. 映射回去
-        output = self.ffn_layer(y_inter)
+        output = self.w2(y_inter)
         return output
 
 

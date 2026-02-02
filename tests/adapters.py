@@ -17,6 +17,7 @@ from cs336_basics.RMSNorm import RMSNorm
 from cs336_basics.SwiGLU import SwiGLU
 from cs336_basics.RoPE import RotaryPositionalEmbedding
 from cs336_basics.multi_head_self_attention import multi_head_self_attetion
+from cs336_basics.TransformerBlock import TransformerBlock
 
 def run_linear(
     d_in: int,
@@ -110,9 +111,9 @@ def run_swiglu(
 
     swiglu_layer = SwiGLU(d_model,d_ff,w1_weight.device,w1_weight.dtype)
 
-    swiglu_layer.linear_layer.weights.data = w3_weight
-    swiglu_layer.glu_layer.weights.data = w1_weight
-    swiglu_layer.ffn_layer.weights.data = w2_weight
+    swiglu_layer.w3.weights.data = w3_weight
+    swiglu_layer.w1.weights.data = w1_weight
+    swiglu_layer.w2.weights.data = w2_weight
 
     output = swiglu_layer(in_features)
     return output
@@ -337,7 +338,25 @@ def run_transformer_block(
         Float[Tensor, "batch sequence_length d_model"] Tensor with the output of
         running the Transformer block on the input features while using RoPE.
     """
-    raise NotImplementedError
+    # 1. 实例化模型并移动到正确的设备
+    device = in_features.device
+    tf = TransformerBlock(d_model, num_heads, d_ff).to(device)
+
+    # 2. 加载权重 (这一步如果不做，测试必挂)
+    # 你的变量名 ln1, ln2, attn, ffn 必须和 weights 的 key 对应
+    tf.load_state_dict(weights)
+
+    tf.eval()
+
+    # 3. 构造token_positions
+    seq_len = in_features.shape[-2]
+    token_positions = torch.arange(seq_len, device=device)
+
+    # 4. 运行forward
+    with torch.no_grad():
+        output = tf.forward(in_features, theta, max_seq_len, token_positions)
+
+    return output
 
 
 def run_transformer_lm(

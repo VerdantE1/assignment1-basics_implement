@@ -8,7 +8,7 @@ class RMSNorm(nn.Module):
         kwargs={"device":device,"dtype":dtype}
 
         self.d_model = d_model
-        self.weights = nn.Parameter(torch.ones(d_model,**kwargs))
+        self.weight = nn.Parameter(torch.ones(d_model,**kwargs))
         self.eps = eps
         
 
@@ -27,7 +27,7 @@ class RMSNorm(nn.Module):
         rms = self._compute_rms(x)
 
         # 3. RMS标准化
-        x = x/rms * self.weights
+        x = x/rms * self.weight
 
         # 4. 返回x的原本类型
         x = x.to(in_dtype)
