@@ -18,6 +18,11 @@ from cs336_basics.SwiGLU import SwiGLU
 from cs336_basics.RoPE import RotaryPositionalEmbedding
 from cs336_basics.multi_head_self_attention import multi_head_self_attetion
 from cs336_basics.TransformerBlock import TransformerBlock
+from cs336_basics.Transformer_LLM import Transformer
+from cs336_basics.cross_entropy import cross_entropy
+from cs336_basics.AdamW import AdamW
+from cs336_basics.learning_rate_sche import get_learning_rate
+from cs336_basics.gradient_clipping import clip_grad_norm
 
 def run_linear(
     d_in: int,
@@ -438,7 +443,33 @@ def run_transformer_lm(
         Float[Tensor, "batch_size sequence_length vocab_size"]: Tensor with the predicted unnormalized
         next-word distribution for each token.
     """
-    raise NotImplementedError
+    # 1. 获得设备和类型信息
+    device = in_indices.device
+    dtype = next(iter(weights.values())).dtype
+
+    # 2. 实例化模型
+    model = Transformer(
+        vocab_size,
+        d_model,
+        num_layers,
+        num_heads,
+        d_ff,
+        device,
+        dtype
+    )
+
+    # 3. 加载权重
+    model.load_state_dict(weights)
+
+    # 4. 前向运行
+    with torch.no_grad():
+        logits = model(
+            in_indices = in_indices,
+            theta = rope_theta,
+            context_length = context_length
+        )
+
+    return logits
 
 
 def run_rmsnorm(
@@ -539,7 +570,8 @@ def run_cross_entropy(
     Returns:
         Float[Tensor, ""]: The average cross-entropy loss across examples.
     """
-    raise NotImplementedError
+    mean_loss = cross_entropy(inputs, targets)
+    return mean_loss
 
 
 def run_gradient_clipping(parameters: Iterable[torch.nn.Parameter], max_l2_norm: float) -> None:
@@ -551,14 +583,15 @@ def run_gradient_clipping(parameters: Iterable[torch.nn.Parameter], max_l2_norm:
 
     The gradients of the parameters (parameter.grad) should be modified in-place.
     """
-    raise NotImplementedError
+    clip_grad_norm(parameters, max_l2_norm)
 
 
 def get_adamw_cls() -> Any:
     """
     Returns a torch.optim.Optimizer that implements AdamW.
     """
-    raise NotImplementedError
+    
+    return AdamW
 
 
 def run_get_lr_cosine_schedule(
@@ -586,7 +619,7 @@ def run_get_lr_cosine_schedule(
     Returns:
         Learning rate at the given iteration under the specified schedule.
     """
-    raise NotImplementedError
+    return get_learning_rate(it, max_learning_rate, min_learning_rate, warmup_iters, cosine_cycle_iters)
 
 
 def run_save_checkpoint(

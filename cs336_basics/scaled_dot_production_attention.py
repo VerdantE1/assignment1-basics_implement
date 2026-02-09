@@ -39,7 +39,7 @@ def scaled_dot_production_attention(
     # 4. Softmax归一化
     atten_scores = stable_softmax(atten_scores, dim=-1)  # 列归一化，从key维度上归一化
 
-    # 5. 与Value相乘逐元素相乘
+    # 5. 与Value相乘
     output = torch.einsum('...qk, ...kv -> ...qv', atten_scores, values)
 
     return output

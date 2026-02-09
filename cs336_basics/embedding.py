@@ -12,7 +12,7 @@ class Embedding(nn.Module):
         kwargs = {"device":device,"dtype":dtype}
 
         # 2.为本层参数创建空间
-        self.weights = nn.Parameter(
+        self.weight = nn.Parameter(
             torch.empty(
             self.num_embeddings,
             self.embeddings_dim,
@@ -24,7 +24,7 @@ class Embedding(nn.Module):
         self.reset_parameters()
     
     def reset_parameters(self):
-        init.trunc_normal_(self.weights, 0, 1, -3, 3)
+        init.trunc_normal_(self.weight, 0, 1, -3, 3)
 
     # Lookup Table
     def forward(self,token_ids):
@@ -37,5 +37,5 @@ class Embedding(nn.Module):
             [batch_sz, seq_len, embedding] 
 
         """
-        return self.weights[token_ids]
+        return self.weight[token_ids]
 
